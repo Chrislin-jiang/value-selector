@@ -6,7 +6,7 @@ import { ValueDimension } from '@/types'
 interface PetalData {
   value: ValueDimension
   count: number
-  ratio: number   // 0-1，归一化后的值
+  ratio: number  // 0–1 归一化
 }
 
 interface PetalChartProps {
@@ -15,229 +15,208 @@ interface PetalChartProps {
   selectedId?: number | null
 }
 
-const SIZE = 280          // SVG 宽高
-const CX = SIZE / 2       // 中心 x
-const CY = SIZE / 2       // 中心 y
-const MAX_RADIUS = 100    // 最大花瓣半径
-const MIN_RADIUS = 8      // 最小花瓣半径（无数据时的占位圆）
-const LABEL_RADIUS = 122  // 标签距圆心距离
-const N = 12              // 维度数量
+const SIZE = 300
+const CX = SIZE / 2
+const CY = SIZE / 2
+const MAX_R = 96     // 花瓣最大半径
+const MIN_R = 10     // 花瓣最小半径（无数据时）
+const LABEL_R = 128  // 标签半径
+const N = 12
 
-// 极坐标转笛卡尔坐标
-function polar(angle: number, r: number) {
-  return {
-    x: CX + r * Math.sin(angle),
-    y: CY - r * Math.cos(angle),
-  }
+/** 极坐标 → 笛卡尔（0° = 正上方，顺时针） */
+function pt(angleDeg: number, r: number) {
+  const rad = (angleDeg - 90) * (Math.PI / 180)
+  return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) }
 }
 
-// 生成单个花瓣的 SVG path（泪滴形）
-function petalPath(angle: number, radius: number): string {
+/**
+ * 生成正确的花瓣 SVG path。
+ * 花瓣以圆心为底，沿 angleDeg 方向延伸 radius 长，
+ * 宽度为 radius * widthFactor。
+ * 使用 3 次贝塞尔曲线，左右对称。
+ */
+function petalPath(angleDeg: number, radius: number, widthFactor = 0.38): string {
   if (radius < 2) return ''
-  const halfWidth = radius * 0.35  // 花瓣宽度
-  const tipR = radius              // 花瓣尖端距中心
-  const baseR = MIN_RADIUS * 0.6   // 花瓣根部距中心
 
-  // 花瓣左右控制点的偏移角度
-  const leftAngle  = angle - Math.PI / 7
-  const rightAngle = angle + Math.PI / 7
+  const halfW = radius * widthFactor
+  // 花瓣尖端（沿主轴方向，距圆心 radius）
+  const tip = pt(angleDeg, radius)
+  // 花瓣根部（在圆心附近，距圆心很小）
+  const baseR = Math.min(radius * 0.12, 6)
+  const base = pt(angleDeg, baseR)
 
-  const tip   = polar(angle, tipR)
-  const left  = polar(leftAngle, halfWidth + baseR * 0.5)
-  const right = polar(rightAngle, halfWidth + baseR * 0.5)
-  const base  = polar(angle + Math.PI, baseR)  // 根部（背面）
+  // 花瓣最宽处大约在 50% 处
+  const midR = radius * 0.52
+  // 左右两侧最宽点（垂直于主轴方向偏移 halfW）
+  const perpLeft  = angleDeg - 90
+  const perpRight = angleDeg + 90
+  const leftMid  = {
+    x: pt(angleDeg, midR).x + halfW * Math.cos((perpLeft  - 90) * Math.PI / 180),
+    y: pt(angleDeg, midR).y + halfW * Math.sin((perpLeft  - 90) * Math.PI / 180),
+  }
+  const rightMid = {
+    x: pt(angleDeg, midR).x + halfW * Math.cos((perpRight - 90) * Math.PI / 180),
+    y: pt(angleDeg, midR).y + halfW * Math.sin((perpRight - 90) * Math.PI / 180),
+  }
 
-  // 三次贝塞尔曲线画花瓣轮廓
-  const cp1L = polar(angle - Math.PI / 12, tipR * 0.55)
-  const cp2L = polar(leftAngle - Math.PI / 16, halfWidth * 1.2 + baseR)
-  const cp1R = polar(rightAngle + Math.PI / 16, halfWidth * 1.2 + baseR)
-  const cp2R = polar(angle + Math.PI / 12, tipR * 0.55)
+  // 控制点
+  // 从 base → leftMid：控制点贴近 base 侧
+  const cp1L = {
+    x: base.x + (leftMid.x - base.x) * 0.2,
+    y: base.y + (leftMid.y - base.y) * 0.2,
+  }
+  // leftMid → tip：控制点靠近 tip
+  const cp2L = {
+    x: leftMid.x + (tip.x - leftMid.x) * 0.7,
+    y: leftMid.y + (tip.y - leftMid.y) * 0.7,
+  }
+  // tip → rightMid
+  const cp1R = {
+    x: tip.x + (rightMid.x - tip.x) * 0.3,
+    y: tip.y + (rightMid.y - tip.y) * 0.3,
+  }
+  // rightMid → base
+  const cp2R = {
+    x: rightMid.x + (base.x - rightMid.x) * 0.8,
+    y: rightMid.y + (base.y - rightMid.y) * 0.8,
+  }
 
   return [
-    `M ${base.x} ${base.y}`,
-    `C ${cp2L.x} ${cp2L.y}, ${cp1L.x} ${cp1L.y}, ${left.x} ${left.y}`,
-    `C ${cp1L.x} ${cp1L.y}, ${cp1L.x} ${cp1L.y}, ${tip.x} ${tip.y}`,
-    `C ${cp2R.x} ${cp2R.y}, ${cp1R.x} ${cp1R.y}, ${right.x} ${right.y}`,
-    `C ${cp1R.x} ${cp1R.y}, ${cp2L.x} ${cp2L.y}, ${base.x} ${base.y}`,
+    `M ${base.x.toFixed(2)} ${base.y.toFixed(2)}`,
+    `C ${cp1L.x.toFixed(2)} ${cp1L.y.toFixed(2)},`,
+    `  ${cp2L.x.toFixed(2)} ${cp2L.y.toFixed(2)},`,
+    `  ${tip.x.toFixed(2)} ${tip.y.toFixed(2)}`,
+    `C ${cp1R.x.toFixed(2)} ${cp1R.y.toFixed(2)},`,
+    `  ${cp2R.x.toFixed(2)} ${cp2R.y.toFixed(2)},`,
+    `  ${base.x.toFixed(2)} ${base.y.toFixed(2)}`,
     'Z',
   ].join(' ')
 }
 
-// 简化版：用平滑椭圆形花瓣（更稳定）
-function smoothPetalPath(angle: number, radius: number): string {
-  if (radius < 1) return ''
-  const tipR   = Math.max(radius, MIN_RADIUS)
-  const width  = tipR * 0.4
-
-  // 4个控制点
-  const tip    = polar(angle, tipR)
-  const base   = polar(angle, MIN_RADIUS * 0.5)
-  const left   = polar(angle - Math.PI / 2, width * 0.5)
-  const right  = polar(angle + Math.PI / 2, width * 0.5)
-
-  // 相对于花瓣轴线，实际偏移
-  const lx = CX + (left.x - CX) * 0.4 + (base.x - CX) * 0.6
-  const ly = CY + (left.y - CY) * 0.4 + (base.y - CY) * 0.6
-  const rx = CX + (right.x - CX) * 0.4 + (base.x - CX) * 0.6
-  const ry = CY + (right.y - CY) * 0.4 + (base.y - CY) * 0.6
-
-  return [
-    `M ${base.x} ${base.y}`,
-    `Q ${lx} ${ly} ${tip.x} ${tip.y}`,
-    `Q ${rx} ${ry} ${base.x} ${base.y}`,
-    'Z',
-  ].join(' ')
+// easeOutCubic
+function easeOut(t: number) {
+  return 1 - Math.pow(1 - t, 3)
 }
 
 export default function PetalChart({ data, onPetalClick, selectedId }: PetalChartProps) {
-  const [animRatios, setAnimRatios] = useState<number[]>(data.map(() => 0))
+  const [progress, setProgress] = useState(0)  // 0–1 动画进度
 
-  // 入场生长动画
+  const countKey = data.map((d) => d.count).join(',')
+
   useEffect(() => {
-    setAnimRatios(data.map(() => 0))
+    setProgress(0)
     const duration = 900
-    const startTime = performance.now()
+    const start = performance.now()
+    let raf: number
 
     const tick = (now: number) => {
-      const elapsed = now - startTime
-      const t = Math.min(elapsed / duration, 1)
-      // easeOutBack
-      const ease = 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2)
-      const clampedEase = Math.min(Math.max(ease, 0), 1)
-      setAnimRatios(data.map((d) => d.ratio * clampedEase))
-      if (t < 1) requestAnimationFrame(tick)
+      const t = Math.min((now - start) / duration, 1)
+      setProgress(easeOut(t))
+      if (t < 1) raf = requestAnimationFrame(tick)
     }
-
-    const raf = requestAnimationFrame(tick)
+    raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.map((d) => d.count).join(',')])
+  }, [countKey])
 
   return (
     <svg
-      width={SIZE}
-      height={SIZE}
+      width="100%"
       viewBox={`0 0 ${SIZE} ${SIZE}`}
-      className="w-full max-w-[280px]"
+      style={{ maxWidth: SIZE, display: 'block', margin: '0 auto' }}
     >
-      {/* 背景网格圆 */}
+      {/* 背景网格圆（4 圈虚线） */}
       {[0.25, 0.5, 0.75, 1].map((r) => (
         <circle
           key={r}
-          cx={CX}
-          cy={CY}
-          r={MAX_RADIUS * r}
+          cx={CX} cy={CY}
+          r={MAX_R * r}
           fill="none"
-          stroke="#E5E7EB"
-          strokeWidth="1"
-          strokeDasharray={r === 1 ? '4 3' : '2 3'}
+          stroke={r === 1 ? '#D1D5DB' : '#E5E7EB'}
+          strokeWidth={r === 1 ? 1.5 : 1}
+          strokeDasharray={r === 1 ? '3 4' : '2 4'}
         />
       ))}
 
       {/* 轴线 */}
       {data.map((_, i) => {
-        const angle = (2 * Math.PI * i) / N
-        const end = polar(angle, MAX_RADIUS)
+        const end = pt(i * (360 / N), MAX_R)
         return (
-          <line
-            key={i}
-            x1={CX}
-            y1={CY}
-            x2={end.x}
-            y2={end.y}
-            stroke="#E5E7EB"
-            strokeWidth="1"
-          />
+          <line key={i} x1={CX} y1={CY} x2={end.x} y2={end.y}
+            stroke="#E5E7EB" strokeWidth={1} />
         )
       })}
 
-      {/* 花瓣 */}
+      {/* 花瓣（底层先渲染无数据的灰色占位） */}
       {data.map((d, i) => {
-        const angle    = (2 * Math.PI * i) / N
-        const animR    = animRatios[i] * MAX_RADIUS
+        const angleDeg = i * (360 / N)
         const hasData  = d.count > 0
+        const r = hasData
+          ? Math.max(d.ratio * MAX_R * progress, MIN_R * 0.5)
+          : MIN_R * 0.6  // 灰色小占位
+        const path = petalPath(angleDeg, r)
+        if (!path) return null
         const isSelected = selectedId === d.value.id
 
-        const path = smoothPetalPath(angle, hasData ? Math.max(animR, 4) : 0)
-        if (!path) return null
-
         return (
-          <g key={d.value.id} style={{ cursor: 'pointer' }} onClick={() => onPetalClick(d.value)}>
-            {/* 花瓣填充 */}
+          <g key={d.value.id} onClick={() => onPetalClick(d.value)}
+            style={{ cursor: 'pointer' }}>
+            {/* 选中光晕（外层，先绘制） */}
+            {isSelected && (
+              <path d={petalPath(angleDeg, r + 6)}
+                fill={d.value.color} fillOpacity={0.18}
+                stroke="none" />
+            )}
+            {/* 花瓣主体 */}
             <path
               d={path}
               fill={hasData ? d.value.color : '#E5E7EB'}
-              fillOpacity={hasData ? (isSelected ? 0.9 : 0.65) : 0.4}
+              fillOpacity={hasData ? (isSelected ? 0.88 : 0.60) : 0.35}
               stroke={hasData ? d.value.color : '#D1D5DB'}
-              strokeWidth={isSelected ? 2 : 1}
-              style={{ transition: 'fill-opacity 0.2s, stroke-width 0.2s' }}
+              strokeWidth={isSelected ? 1.8 : 0.8}
+              strokeOpacity={0.7}
             />
-            {/* 选中时的外发光 */}
-            {isSelected && (
-              <path
-                d={path}
-                fill="none"
-                stroke={d.value.color}
-                strokeWidth={3}
-                strokeOpacity={0.3}
-              />
-            )}
           </g>
         )
       })}
 
       {/* 中心圆 */}
-      <circle cx={CX} cy={CY} r={8} fill="#F9FAFB" stroke="#E5E7EB" strokeWidth={1.5} />
+      <circle cx={CX} cy={CY} r={9}
+        fill="white" stroke="#E5E7EB" strokeWidth={1.5} />
 
-      {/* 标签 */}
+      {/* 标签层（最上层，不参与点击判断，透传给花瓣 g） */}
       {data.map((d, i) => {
-        const angle    = (2 * Math.PI * i) / N
-        const labelPos = polar(angle, LABEL_RADIUS)
-        const hasData  = d.count > 0
+        const angleDeg = i * (360 / N)
+        const lp = pt(angleDeg, LABEL_R)
+        const hasData = d.count > 0
 
-        // 文字对齐根据位置调整
-        const sinA = Math.sin(angle)
-        let textAnchor: 'start' | 'middle' | 'end' = 'middle'
-        if (sinA > 0.3)       textAnchor = 'start'
-        else if (sinA < -0.3) textAnchor = 'end'
+        // 文字对齐：左侧 end，右侧 start，上下 middle
+        const cosA = Math.cos((angleDeg - 90) * Math.PI / 180)
+        const anchor = cosA > 0.25 ? 'start' : cosA < -0.25 ? 'end' : 'middle'
 
         return (
-          <g
-            key={`label-${d.value.id}`}
-            style={{ cursor: 'pointer' }}
+          <g key={`lbl-${d.value.id}`}
             onClick={() => onPetalClick(d.value)}
-          >
-            <text
-              x={labelPos.x}
-              y={labelPos.y - 5}
-              textAnchor={textAnchor}
-              fontSize="14"
-              dominantBaseline="middle"
-            >
+            style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+            {/* emoji */}
+            <text x={lp.x} y={lp.y - 7}
+              textAnchor={anchor} fontSize="15" dominantBaseline="middle">
               {d.value.emoji}
             </text>
-            <text
-              x={labelPos.x}
-              y={labelPos.y + 10}
-              textAnchor={textAnchor}
-              fontSize="9"
-              fill={hasData ? '#4B5563' : '#9CA3AF'}
-              fontWeight={hasData ? '600' : '400'}
-              dominantBaseline="middle"
-            >
+            {/* 名称 */}
+            <text x={lp.x} y={lp.y + 9}
+              textAnchor={anchor} fontSize="9.5"
+              fill={hasData ? '#374151' : '#9CA3AF'}
+              fontWeight={hasData ? '700' : '400'}
+              dominantBaseline="middle">
               {d.value.name}
             </text>
-            {/* 选择次数角标 */}
-            {d.count > 0 && (
-              <text
-                x={labelPos.x}
-                y={labelPos.y + 21}
-                textAnchor={textAnchor}
-                fontSize="8"
-                fill={d.value.color}
-                fontWeight="600"
-                dominantBaseline="middle"
-              >
+            {/* 次数 */}
+            {hasData && (
+              <text x={lp.x} y={lp.y + 21}
+                textAnchor={anchor} fontSize="8"
+                fill={d.value.color} fontWeight="600"
+                dominantBaseline="middle">
                 ×{d.count}
               </text>
             )}
