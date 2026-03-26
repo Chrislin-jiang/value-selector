@@ -35,6 +35,7 @@ export interface ActionRecord {
   status: 'completed' | 'skipped'
   feeling?: string
   completedAt?: string
+  difficultyFeedback?: 'too_easy' | 'just_right' | 'challenging'
 }
 
 export interface UserProfile {

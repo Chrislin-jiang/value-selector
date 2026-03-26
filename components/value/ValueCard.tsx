@@ -25,7 +25,10 @@ export default function ValueCard({
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || dimmed) return
 
-    const rect = e.currentTarget.getBoundingClientRect()
+    // 同步获取 rect，避免异步时 currentTarget 变为 null
+    const target = e.currentTarget
+    if (!target) return
+    const rect = target.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
     const id = Date.now()
