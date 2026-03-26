@@ -1,16 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Download, Trash2, Info } from 'lucide-react'
+import { ArrowLeft, Download, Info } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
-import TabBar from '@/components/ui/TabBar'
 
 export default function SettingsPage() {
   const router = useRouter()
   const { userProfile, choices, actions } = useAppStore()
-  const [showConfirm, setShowConfirm] = useState(false)
 
   const handleExport = () => {
     const data = {
@@ -127,8 +124,6 @@ export default function SettingsPage() {
           </p>
         </motion.div>
       </div>
-
-      <TabBar activeTab="settings" />
     </div>
   )
 }

@@ -25,8 +25,10 @@ const config: Config = {
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out forwards',
         'slide-up': 'slideUp 0.4s ease-out forwards',
-        'ripple': 'ripple 0.6s ease-out forwards',
+        'ripple': 'ripple 0.7s ease-out forwards',
         'float': 'float 3s ease-in-out infinite',
+        'bounce-in': 'bounceIn 0.4s ease-out forwards',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -38,12 +40,21 @@ const config: Config = {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         ripple: {
-          '0%': { transform: 'scale(0)', opacity: '0.8' },
-          '100%': { transform: 'scale(4)', opacity: '0' },
+          '0%': { transform: 'scale(0)', opacity: '0.6' },
+          '100%': { transform: 'scale(8)', opacity: '0' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-8px)' },
+        },
+        bounceIn: {
+          '0%': { transform: 'scale(0.85)', opacity: '0' },
+          '60%': { transform: 'scale(1.05)', opacity: '1' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% center' },
+          '100%': { backgroundPosition: '200% center' },
         },
       },
     },
