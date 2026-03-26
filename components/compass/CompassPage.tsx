@@ -1,151 +1,231 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts'
+import { useRouter } from 'next/navigation'
+import { Settings } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import { VALUES } from '@/data/values'
+import { ValueDimension } from '@/types'
+import PetalChart from './PetalChart'
+import ValueDetailSheet from './ValueDetailSheet'
 
 export default function CompassPage() {
+  const router = useRouter()
   const { choices, actions, userProfile } = useAppStore()
+  const [selectedValue, setSelectedValue] = useState<ValueDimension | null>(null)
 
-  const radarData = useMemo(() => {
+  const totalChoices    = choices.length
+  const completedActions = actions.filter((a) => a.status === 'completed').length
+
+  // 计算各维度数据（归一化）
+  const petalData = useMemo(() => {
+    const maxCount = Math.max(...VALUES.map((v) => choices.filter((c) => c.valueId === v.id).length), 1)
     return VALUES.map((v) => {
       const count = choices.filter((c) => c.valueId === v.id).length
       return {
-        value: v.name,
+        value: v,
         count,
-        fullMark: Math.max(...choices.map((c) => {
-          const cnt = choices.filter((x) => x.valueId === c.valueId).length
-          return cnt
-        }), 1),
+        ratio: count / maxCount,
       }
     })
   }, [choices])
 
-  const completedActions = actions.filter((a) => a.status === 'completed').length
-  const totalChoices = choices.length
+  // 最高频价值（Top 3）
+  const topValues = useMemo(() =>
+    [...petalData]
+      .filter((d) => d.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3),
+  [petalData])
+
+  const handlePetalClick = (value: ValueDimension) => {
+    setSelectedValue(value)
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-[#FAFBFE] to-[#F0F2F8]">
+
       {/* Header */}
-      <div className="px-5 pt-12 pb-6">
+      <div className="flex items-center justify-between px-5 pt-12 pb-4">
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <p className="text-sm font-medium uppercase tracking-widest text-gray-400 mb-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-300 mb-0.5">
             价值罗盘
           </p>
           <h1 className="text-2xl font-bold text-gray-800">你的价值地图</h1>
         </motion.div>
+        <button
+          onClick={() => router.push('/settings')}
+          className="rounded-full p-2 text-gray-400 hover:bg-gray-100 transition-colors"
+        >
+          <Settings className="h-5 w-5" />
+        </button>
       </div>
 
-      {/* Stats */}
+      {/* 统计摘要 */}
       <motion.div
-        className="mx-5 mb-6 grid grid-cols-3 gap-3"
-        initial={{ opacity: 0, y: 12 }}
+        className="mx-5 mb-5 grid grid-cols-3 gap-2.5"
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
         {[
-          { label: '累计选择', value: totalChoices, unit: '次' },
-          { label: '完成行动', value: completedActions, unit: '次' },
-          { label: '连续天数', value: userProfile.streakDays, unit: '天' },
-        ].map((stat) => (
+          { label: '累计选择', val: totalChoices,    unit: '次',  emoji: '🗓' },
+          { label: '完成行动', val: completedActions, unit: '次',  emoji: '✅' },
+          { label: '连续天数', val: userProfile.streakDays, unit: '天', emoji: '🔥' },
+        ].map((s) => (
           <div
-            key={stat.label}
-            className="rounded-2xl bg-white p-3 text-center shadow-sm"
+            key={s.label}
+            className="flex flex-col items-center rounded-2xl bg-white py-3 shadow-sm"
           >
-            <p className="text-2xl font-bold text-gray-800">
-              {stat.value}
-              <span className="text-sm font-normal text-gray-400">{stat.unit}</span>
+            <span className="text-base mb-0.5">{s.emoji}</span>
+            <p className="text-xl font-bold text-gray-800 leading-none">
+              {s.val}
+              <span className="text-xs font-normal text-gray-400">{s.unit}</span>
             </p>
-            <p className="mt-0.5 text-xs text-gray-400">{stat.label}</p>
+            <p className="mt-0.5 text-[10px] text-gray-400">{s.label}</p>
           </div>
         ))}
       </motion.div>
 
-      {/* Radar Chart */}
+      {/* 花瓣罗盘图 */}
       <motion.div
-        className="mx-5 rounded-3xl bg-white p-6 shadow-sm"
-        initial={{ opacity: 0, scale: 0.95 }}
+        className="mx-5 mb-5 flex flex-col items-center rounded-3xl bg-white py-5 shadow-sm"
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2, duration: 0.4 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
       >
         {totalChoices === 0 ? (
-          <div className="flex flex-col items-center py-12 text-center">
-            <span className="mb-4 text-5xl">🌱</span>
-            <p className="text-gray-500">还没有数据</p>
-            <p className="mt-1 text-sm text-gray-400">做几次选择后，你的价值地图就会出现</p>
+          <div className="flex flex-col items-center py-14 text-center px-6">
+            <motion.span
+              className="mb-4 text-5xl inline-block"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              🌱
+            </motion.span>
+            <p className="text-gray-600 font-medium mb-1">你的价值地图正在生长</p>
+            <p className="text-sm text-gray-400">
+              每做一次选择，就会有一片花瓣出现
+            </p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis
-                dataKey="value"
-                tick={{ fontSize: 11, fill: '#9ca3af' }}
-              />
-              <Radar
-                name="选择次数"
-                dataKey="count"
-                stroke="#6366f1"
-                fill="#6366f1"
-                fillOpacity={0.3}
-                strokeWidth={2}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+          <>
+            <p className="mb-3 text-xs text-gray-400">点击花瓣查看选择历史</p>
+            <PetalChart
+              data={petalData}
+              onPetalClick={handlePetalClick}
+              selectedId={selectedValue?.id}
+            />
+          </>
         )}
       </motion.div>
 
-      {/* Value list */}
-      {totalChoices > 0 && (
+      {/* Top 价值 */}
+      {topValues.length > 0 && (
         <motion.div
-          className="mx-5 mt-4 mb-8"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          className="mx-5 mb-5"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
         >
-          <p className="mb-3 text-sm font-medium text-gray-400">选择分布</p>
+          <p className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-gray-300">
+            你的核心价值
+          </p>
           <div className="space-y-2">
-            {VALUES.filter((v) => choices.some((c) => c.valueId === v.id))
-              .sort(
-                (a, b) =>
-                  choices.filter((c) => c.valueId === b.id).length -
-                  choices.filter((c) => c.valueId === a.id).length
-              )
-              .map((v) => {
-                const count = choices.filter((c) => c.valueId === v.id).length
-                const pct = Math.round((count / totalChoices) * 100)
-                return (
-                  <div
-                    key={v.id}
-                    className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 shadow-sm"
-                  >
-                    <span className="text-xl">{v.emoji}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-700">{v.name}</span>
-                        <span className="text-xs text-gray-400">{count}次 · {pct}%</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ backgroundColor: v.color }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
-                        />
-                      </div>
+            {topValues.map((d, rank) => {
+              const pct = Math.round((d.count / totalChoices) * 100)
+              return (
+                <motion.button
+                  key={d.value.id}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm text-left hover:shadow-md transition-shadow active:scale-[0.99]"
+                  onClick={() => handlePetalClick(d.value)}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.35 + rank * 0.07 }}
+                >
+                  {/* 排名 */}
+                  <span className="text-xs font-bold text-gray-300 w-4 shrink-0">
+                    #{rank + 1}
+                  </span>
+
+                  {/* Emoji */}
+                  <span className="text-xl shrink-0">{d.value.emoji}</span>
+
+                  {/* 名称 + 进度条 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-semibold text-gray-700">{d.value.name}</span>
+                      <span className="text-xs text-gray-400 shrink-0 ml-2">
+                        {d.count}次 · {pct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: d.value.color }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.7, delay: 0.4 + rank * 0.07, ease: 'easeOut' }}
+                      />
                     </div>
                   </div>
-                )
-              })}
+
+                  {/* 箭头 */}
+                  <span className="text-gray-300 text-sm shrink-0">›</span>
+                </motion.button>
+              )
+            })}
           </div>
         </motion.div>
       )}
+
+      {/* 全部维度分布（包含未选择的） */}
+      {totalChoices > 0 && (
+        <motion.div
+          className="mx-5 mb-24"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <p className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-gray-300">
+            全部 12 个维度
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {[...petalData].sort((a, b) => b.count - a.count).map((d) => (
+              <motion.button
+                key={d.value.id}
+                className="flex flex-col items-center rounded-2xl bg-white py-3 px-2 shadow-sm text-center hover:shadow-md transition-shadow active:scale-95"
+                onClick={() => handlePetalClick(d.value)}
+                style={{
+                  borderBottom: d.count > 0 ? `3px solid ${d.value.color}` : '3px solid #E5E7EB',
+                  opacity: d.count === 0 ? 0.5 : 1,
+                }}
+              >
+                <span className="text-xl mb-1">{d.value.emoji}</span>
+                <span className="text-xs font-semibold text-gray-700 mb-0.5">{d.value.name}</span>
+                <span
+                  className="text-xs font-bold"
+                  style={{ color: d.count > 0 ? d.value.color : '#9CA3AF' }}
+                >
+                  {d.count > 0 ? `×${d.count}` : '未选'}
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 维度详情抽屉 */}
+      <ValueDetailSheet
+        value={selectedValue}
+        choices={choices}
+        actions={actions}
+        onClose={() => setSelectedValue(null)}
+      />
     </div>
   )
 }
