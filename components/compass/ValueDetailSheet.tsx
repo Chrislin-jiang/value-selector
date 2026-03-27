@@ -19,13 +19,13 @@ export default function ValueDetailSheet({
   actions,
   onClose,
 }: ValueDetailSheetProps) {
-  if (!value) return null
+  const valueChoices = value
+    ? choices
+        .filter((c) => c.valueId === value.id)
+        .sort((a, b) => b.date.localeCompare(a.date))
+    : []
 
-  const valueChoices = choices
-    .filter((c) => c.valueId === value.id)
-    .sort((a, b) => b.date.localeCompare(a.date))
-
-  const valueActions = actions.filter((a) => a.valueId === value.id)
+  const valueActions = value ? actions.filter((a) => a.valueId === value.id) : []
   const completedCount = valueActions.filter((a) => a.status === 'completed').length
 
   const formatDate = (dateStr: string) => {
