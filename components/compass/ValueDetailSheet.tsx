@@ -1,5 +1,5 @@
 'use client'
-
+// ValueDetailSheet - 维度历史详情抽屉
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, CheckCircle, SkipForward } from 'lucide-react'
 import { ValueDimension, DailyChoice, ActionRecord } from '@/types'

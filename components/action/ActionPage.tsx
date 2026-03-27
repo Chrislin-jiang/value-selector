@@ -31,9 +31,7 @@ export default function ActionPage() {
   const todayAction = getTodayAction()
 
   const [currentAction, setCurrentAction] = useState<MicroAction | null>(null)
-  // 备选池：预先抓 2 个备选，换一个时依次出队
   const [alternateActions, setAlternateActions] = useState<MicroAction[]>([])
-  const [usedActionIds, setUsedActionIds] = useState<number[]>([])
 
   const [status, setStatus] = useState<PageStatus>(
     todayAction?.status === 'completed' ? 'done' :
@@ -67,7 +65,6 @@ export default function ActionPage() {
     const alt2 = getRandomAction(valueId, used)
 
     setCurrentAction(main)
-    setUsedActionIds(used)
     setAlternateActions([alt1, alt2].filter(Boolean) as MicroAction[])
 
     // 触发卡片翻转入场
@@ -128,17 +125,18 @@ export default function ActionPage() {
   }
 
   const handleSwitch = () => {
-    if (alternateActions.length === 0) {
-      // 备选耗尽时重新随机
-      buildPool(usedActionIds)
-      return
+    if (alternateActions.length > 0) {
+      // 取出队首备选
+      const [next, ...rest] = alternateActions
+      setCurrentAction(next)
+      setAlternateActions(rest)
+    } else {
+      // 备选耗尽 → 清空已用列表，从整个行动池循环重取
+      // 只保留当前显示的那一条，避免立刻重复
+      const keepId = currentAction.id
+      buildPool([keepId])
     }
-    // 取出第一个备选，把当前加入 used
-    const [next, ...rest] = alternateActions
-    setUsedActionIds((prev) => [...prev, next.id])
-    setCurrentAction(next)
-    setAlternateActions(rest)
-    // 翻转动画
+    // 触发卡片翻转动画
     setCardFlipped(false)
     setTimeout(() => setCardFlipped(true), 50)
   }
@@ -272,17 +270,15 @@ export default function ActionPage() {
                 </motion.div>
               </div>
 
-              {/* 备选提示 */}
-              {alternateActions.length > 0 && (
-                <motion.p
-                  className="mb-4 text-center text-xs text-gray-300"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  还有 {alternateActions.length} 个备选行动
-                </motion.p>
-              )}
+              {/* 换一个提示 */}
+              <motion.p
+                className="mb-4 text-center text-xs text-gray-300"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                不喜欢这个？点「换一个」循环切换
+              </motion.p>
 
               {/* 操作按钮 */}
               <div className="flex flex-col gap-3">
